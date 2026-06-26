@@ -9,9 +9,9 @@ Idempotent by design: if `.env` already has a key, this exits WITHOUT touching
 the Keychain — so you are prompted for your login/Keychain password at most
 ONCE. Use --force to re-extract (e.g. after the session expires).
 
-    python src/auth.py            # extract once -> .env
-    python src/auth.py --force     # re-extract a fresh key
-    python src/auth.py --print     # print masked, don't write
+    python3 src/auth.py            # extract once -> .env
+    python3 src/auth.py --force     # re-extract a fresh key
+    python3 src/auth.py --print     # print masked, don't write
 
 When macOS shows the Keychain prompt, click **Always Allow** so future
 re-extractions never prompt again.
@@ -153,7 +153,7 @@ def main() -> None:
         return
     _write_env(key)
     print(f"[ok] wrote {os.path.relpath(ENV_PATH, ROOT)} (chmod 600): {_mask(key)}")
-    print("     You can now run: python src/export.py --list")
+    print("     You can now run: python3 src/export.py --list")
 
 
 if __name__ == "__main__":

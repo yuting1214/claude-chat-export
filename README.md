@@ -15,11 +15,11 @@ No installation — Python 3.8+ standard library only.
 ```bash
 # 1. One-time auth (macOS): extract your sessionKey locally from the desktop app.
 #    macOS will prompt for your password ONCE — click "Always Allow".
-python src/auth.py        # writes a gitignored .env
+python3 src/auth.py        # writes a gitignored .env
 
 # 2. Preview, then export (.env is auto-loaded)
-python src/export.py --list       # see what's there
-python src/export.py              # export everything -> conversations/
+python3 src/export.py --list       # see what's there
+python3 src/export.py              # export everything -> conversations/
 ```
 
 > **Not on macOS / no desktop app?** Copy the `sessionKey` cookie from
@@ -105,8 +105,8 @@ The normalized JSON schema per conversation:
 ### Regenerating binary deliverables
 
 ```bash
-python src/regenerate.py                       # rebuild all
-python src/regenerate.py --conversation <dir>  # just one
+python3 src/regenerate.py                       # rebuild all
+python3 src/regenerate.py --conversation <dir>  # just one
 ```
 
 Needs Node (`.js` builders) and/or Python (`.py` builders) + network to install

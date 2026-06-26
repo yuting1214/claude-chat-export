@@ -21,7 +21,7 @@ claude-chat-export/
 └── .regen-cache/        # (gitignored) regenerate.py's node/python deps
 ```
 
-**Always run scripts from the repo root** (e.g. `python src/export.py`), so the
+**Always run scripts from the repo root** (e.g. `python3 src/export.py`), so the
 scripts find `.env`, write to `conversations/`, and cache deps in `.regen-cache/`.
 
 ## Tools
@@ -47,7 +47,7 @@ On macOS, the key lives in the Claude desktop app's encrypted cookie. Extract it
 locally — nothing is sent anywhere:
 
 ```bash
-python src/auth.py
+python3 src/auth.py
 ```
 
 - macOS will show **one** Keychain prompt. Tell the user up front:
@@ -73,16 +73,22 @@ Never echo the key back, never commit it, never paste it into chat output.
 `src/export.py` auto-loads `.env`, so no need to export the variable.
 
 ```bash
-python src/export.py --list                  # preview + sync status (new/changed/ok)
-python src/export.py                          # incremental sync -> conversations/
-python src/export.py --limit 5                # cap this run to 5 (newest of work set)
-python src/export.py --conversation <uuid>    # one
-python src/export.py --full                   # re-export everything, ignore manifest
-python src/export.py --format md              # md only (default md,json)
+python3 src/export.py --list                  # preview + sync status (new/changed/ok)
+python3 src/export.py                          # incremental sync -> conversations/
+python3 src/export.py --limit 5                # cap this run to 5 (newest of work set)
+python3 src/export.py --conversation <uuid>    # one
+python3 src/export.py --full                   # re-export everything, ignore manifest
+python3 src/export.py --format md              # md only (default md,json)
 ```
 
-Flow: run `--list` first (it shows how many are **new / changed / unchanged**),
-report that, confirm scope, then export.
+Default end-to-end flow:
+1. `--list` first (shows **new / changed / unchanged**); report the counts.
+2. Confirm scope, then export.
+3. **If the export reports any binary deliverables, automatically run
+   `python3 src/regenerate.py`** (see Step 4) — don't ask first.
+4. Give one final summary (exported counts + regenerated counts).
+
+(`python3` — `python` may not be on PATH on macOS.)
 
 ## Incremental sync (default behavior)
 
@@ -121,19 +127,29 @@ conversations/<conversation-slug>/
   `conversation.json` with the builder script that produced them; src/regenerate.py
   rebuilds the real file (next section).
 
-## Step 4 — regenerate binary deliverables (optional)
+## Step 4 — regenerate binary deliverables (run automatically)
 
-If any conversation shows **binary deliverables**, rebuild the real files by
-re-running their builder scripts locally:
+If the export reports any **binary deliverables** (e.g. "N binary"), **just run
+the regenerator** — do NOT stop to ask the user first. Rebuilding the real
+`.docx/.pdf/.xlsx/.pptx` is the expected completion of the export:
 
 ```bash
-python src/regenerate.py                 # rebuild all in conversations/
-python src/regenerate.py --conversation <folder>
+python3 src/regenerate.py                 # rebuild all in conversations/
+python3 src/regenerate.py --conversation <folder>   # or a single folder
 ```
 
+Default behavior, in order:
+1. Whenever a sync exports conversations that have binary deliverables, run
+   `python3 src/regenerate.py` right after, by default.
+2. Report the result (`Regenerated X, failed Y`) as part of the export summary.
+3. Only pause to ask the user if it **can't** proceed — i.e. Node/Python is
+   missing, or there's no network to install builder libraries.
+
+Notes:
 - Needs **Node** (for `.js` builders) and/or **Python** (`.py` builders) plus
   network to install the libraries each builder imports (cached in
-  `.regen-cache/`, gitignored).
+  `.regen-cache/`, gitignored). The first run installs deps (slow); later runs
+  reuse the cache (fast).
 - Anything it can't rebuild is left as a `<name>.UNAVAILABLE.txt` note beside the
   builder — nothing is lost; rerun once the runtime/network is available.
 
@@ -155,7 +171,7 @@ never share it, without explicit instruction.
 
 ## Troubleshooting
 
-- **401/403** → key expired. Run `python src/auth.py --force`.
+- **401/403** → key expired. Run `python3 src/auth.py --force`.
 - **Empty `--list`** → wrong org auto-picked; pass `--org <uuid>` (find orgs by
   GETting `/api/organizations` with the same cookie).
 - **Keychain prompt won't go away** → user clicked "Allow" (once) instead of

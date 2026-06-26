@@ -7,11 +7,11 @@ Auth: pass your claude.ai `sessionKey` cookie via --session-key or the
 CLAUDE_SESSION_KEY environment variable. The org is auto-discovered.
 
 Usage:
-    python src/export.py --list                  # list conversations only
-    python src/export.py                          # export all -> conversations/
-    python src/export.py --limit 5                # export newest 5
-    python src/export.py --conversation <uuid>    # export one
-    python src/export.py --format md              # md only (default: md,json)
+    python3 src/export.py --list                  # list conversations only
+    python3 src/export.py                          # export all -> conversations/
+    python3 src/export.py --limit 5                # export newest 5
+    python3 src/export.py --conversation <uuid>    # export one
+    python3 src/export.py --format md              # md only (default: md,json)
 
 See CLAUDE.md for how an agent should obtain the session key and run this.
 """

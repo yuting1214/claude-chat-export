@@ -9,9 +9,9 @@ recreate the real file.
 Requires Node (for .js builders) and/or Python (for .py builders), plus network
 to install the libraries each builder imports (cached in .regen-cache/).
 
-    python src/regenerate.py                 # scan ./conversations and rebuild all
-    python src/regenerate.py --dir DIR       # scan a different export dir
-    python src/regenerate.py --conversation <folder>
+    python3 src/regenerate.py                 # scan ./conversations and rebuild all
+    python3 src/regenerate.py --dir DIR       # scan a different export dir
+    python3 src/regenerate.py --conversation <folder>
 
 Anything that can't be rebuilt (missing runtime, offline, build error) is left
 as a `<name>.UNAVAILABLE.txt` note beside its builder — nothing is lost.
@@ -220,7 +220,7 @@ def write_unavailable(conv_dir: str, name: str, builder_rel: str, reason: str):
             f"'{name}' could not be regenerated locally.\n"
             f"Reason: {reason}\n"
             f"Builder script: {builder_rel}\n"
-            "Re-run `python src/regenerate.py` once the runtime/network is available.\n"
+            "Re-run `python3 src/regenerate.py` once the runtime/network is available.\n"
         )
 
 
