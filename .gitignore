@@ -1,0 +1,20 @@
+# Exported conversations are PERSONAL data — never commit them.
+/conversations/*
+!/conversations/.gitkeep
+
+# Secrets
+.env
+*.session
+session_key.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# regenerate.py dependency cache (node_modules / venv)
+/.regen-cache/
+
+# OS
+.DS_Store
