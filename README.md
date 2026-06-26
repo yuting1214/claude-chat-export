@@ -30,14 +30,27 @@ python src/export.py              # export everything -> conversations/
 
 | Flag | Meaning |
 | --- | --- |
-| `--list` | List conversations and exit (no download) |
-| `--limit N` | Export only the newest N |
+| `--list` | List conversations + sync status (new/changed/unchanged) |
+| `--limit N` | Cap this run to N conversations (newest of the work set) |
+| `--full` | Re-export everything, ignoring the manifest |
 | `--conversation <uuid>` | Export a single conversation |
 | `--format md\|json\|md,json` | Output formats (default `md,json`) |
 | `--out DIR` | Output directory (default `conversations/`) |
 | `--org <uuid>` | Override org (auto-discovered by default) |
 | `--session-key <key>` | Session key (or set `CLAUDE_SESSION_KEY` / `.env`) |
 | `--delay <seconds>` | Pause between fetches (default `1.0`, raise if rate-limited) |
+
+## Incremental sync
+
+The export is **incremental** by default — re-running only fetches what changed:
+
+- A `conversations/manifest.json` (keyed by conversation `uuid`) tracks each
+  chat's `updated_at` and folder.
+- Each run fetches only **new** chats and ones whose `updated_at` advanced;
+  unchanged chats are skipped. The run reports `N new, M updated, K unchanged`.
+- Renamed chats keep their folder; chats deleted on claude.ai are kept locally
+  and flagged `"archived": true`.
+- Use `--full` to force a complete re-export.
 
 ## Rate-limit safety
 
@@ -52,7 +65,7 @@ One folder per conversation:
 
 ```
 conversations/
-├── index.json
+├── manifest.json               # sync state + index of all chats (keyed by uuid)
 └── my-chat-about-rust/
     ├── conversation.md          # readable transcript
     ├── conversation.json        # normalized data + artifact/input manifests

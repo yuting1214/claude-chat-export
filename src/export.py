@@ -26,6 +26,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 
 BASE = "https://claude.ai"
 UA = (
@@ -533,6 +534,45 @@ def _write_inputs(inputs: list, conv_dir: str, session_key: str) -> None:
             inp["downloaded"] = False
 
 
+# --------------------------------------------------------------------------- #
+# Incremental sync — manifest keyed by conversation uuid                        #
+# --------------------------------------------------------------------------- #
+MANIFEST_NAME = "manifest.json"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def load_manifest(out_dir: str) -> dict:
+    path = os.path.join(out_dir, MANIFEST_NAME)
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                m = json.load(f)
+            m.setdefault("conversations", {})
+            return m
+        except (json.JSONDecodeError, OSError):
+            pass
+    return {"version": 1, "org": None, "last_sync": None, "conversations": {}}
+
+
+def save_manifest(out_dir: str, manifest: dict) -> None:
+    with open(os.path.join(out_dir, MANIFEST_NAME), "w") as f:
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
+
+
+def _needs_export(summary: dict, known: dict, full: bool) -> str:
+    """Classify a conversation vs the manifest: new | changed | unchanged."""
+    entry = known.get(summary["uuid"])
+    if entry is None:
+        return "new"
+    if full:
+        return "changed"
+    server_ts = summary.get("updated_at") or ""
+    return "changed" if server_ts > (entry.get("updated_at") or "") else "unchanged"
+
+
 def main() -> None:
     load_env_file()
     p = argparse.ArgumentParser(description="Export claude.ai chat history.")
@@ -543,7 +583,10 @@ def main() -> None:
     p.add_argument("--format", default="md,json", help="md, json, or md,json")
     p.add_argument("--limit", type=int, help="export only the newest N")
     p.add_argument("--conversation", help="export a single conversation uuid")
-    p.add_argument("--list", action="store_true", help="list conversations and exit")
+    p.add_argument("--list", action="store_true",
+                   help="list conversations + sync status, then exit")
+    p.add_argument("--full", action="store_true",
+                   help="re-export everything, ignoring the manifest (no skip)")
     p.add_argument(
         "--delay", type=float, default=DEFAULT_DELAY,
         help=f"seconds between conversation fetches (default: {DEFAULT_DELAY})",
@@ -559,41 +602,64 @@ def main() -> None:
     formats = {f.strip() for f in args.format.split(",") if f.strip()}
     org = args.org or discover_org(args.session_key)
 
-    summaries = list_conversations(args.session_key, org)
-    # Newest first by updated_at when available.
-    summaries.sort(key=lambda c: c.get("updated_at") or "", reverse=True)
-
-    if args.conversation:
-        summaries = [c for c in summaries if c.get("uuid") == args.conversation]
-        if not summaries:
-            sys.exit(f"[find] conversation {args.conversation} not found.")
-    elif args.limit:
-        summaries = summaries[: args.limit]
-
-    if args.list:
-        for c in summaries:
-            print(f"{c.get('uuid')}  {c.get('updated_at','')[:10]}  {c.get('name')}")
-        print(f"\n{len(summaries)} conversation(s).")
-        return
+    all_summaries = list_conversations(args.session_key, org)
+    all_summaries.sort(key=lambda c: c.get("updated_at") or "", reverse=True)
+    present_uuids = {s["uuid"] for s in all_summaries}
 
     os.makedirs(args.out, exist_ok=True)
-    index, used_folders = [], set()
-    for i, summary in enumerate(summaries, 1):
+    manifest = load_manifest(args.out)
+    known = manifest["conversations"]
+
+    # Scope: a single conversation, or the whole list.
+    summaries = all_summaries
+    if args.conversation:
+        summaries = [c for c in all_summaries if c.get("uuid") == args.conversation]
+        if not summaries:
+            sys.exit(f"[find] conversation {args.conversation} not found.")
+
+    if args.list:
+        counts = {"new": 0, "changed": 0, "unchanged": 0}
+        tags = {"new": "[new]    ", "changed": "[changed]", "unchanged": "[ok]     "}
+        for s in summaries:
+            st = _needs_export(s, known, args.full)
+            counts[st] += 1
+            print(f"{tags[st]} {(s.get('updated_at') or '')[:10]}  {s.get('name')}")
+        print(f"\n{len(summaries)} total — {counts['new']} new, "
+              f"{counts['changed']} changed, {counts['unchanged']} unchanged.")
+        return
+
+    # Work set = new + changed (or everything with --full), newest first.
+    candidates = [s for s in summaries
+                  if _needs_export(s, known, args.full) in ("new", "changed")]
+    unchanged = len(summaries) - len(candidates)
+    work = candidates[: args.limit] if args.limit else candidates
+    deferred = len(candidates) - len(work)
+
+    # Reserve every folder the manifest already owns, so new slugs never clash.
+    used_folders = {e["folder"] for e in known.values() if e.get("folder")}
+
+    new_ct = changed_ct = 0
+    for i, summary in enumerate(work, 1):
         uuid = summary["uuid"]
+        entry = known.get(uuid)
+        status = "changed" if entry else "new"
         full = fetch_conversation(args.session_key, org, uuid)
         arts = extract_artifacts(full)
         inputs = extract_inputs(full)
 
-        # Folder name = conversation slug only (no id suffix); -N on collision.
-        base, n = slugify(summary.get("name") or full.get("name") or "untitled"), 2
-        while base in used_folders:
-            base = f"{slugify(full.get('name') or 'untitled')}-{n}"
-            n += 1
-        used_folders.add(base)
+        # Reuse the existing folder for known chats (stable even if renamed);
+        # otherwise pick a fresh slug, -N on collision.
+        if entry and entry.get("folder"):
+            base = entry["folder"]
+        else:
+            base, n = slugify(summary.get("name") or full.get("name") or "untitled"), 2
+            while base in used_folders:
+                base = f"{slugify(full.get('name') or 'untitled')}-{n}"
+                n += 1
+            used_folders.add(base)
         conv_dir = os.path.join(args.out, base)
         os.makedirs(conv_dir, exist_ok=True)
 
-        # Save/download user inputs first, so metadata records final names.
         _write_inputs(inputs, conv_dir, args.session_key)
         c = normalize(full, arts, inputs)
 
@@ -604,7 +670,8 @@ def main() -> None:
             f", {n_bin} binary" if n_bin else "",
             f", {n_in} input(s)" if n_in else "",
         ])
-        print(f"[{i}/{len(summaries)}] {c['name']} ({c['message_count']} msgs{extra})")
+        print(f"[{i}/{len(work)}] {status:7} {c['name']} "
+              f"({c['message_count']} msgs{extra})")
 
         if "json" in formats:
             with open(os.path.join(conv_dir, "conversation.json"), "w") as f:
@@ -619,24 +686,46 @@ def main() -> None:
             with open(dest, "w", encoding="utf-8") as f:
                 f.write(a["content"])
 
-        index.append(
-            {
-                "uuid": uuid,
-                "name": c["name"],
-                "updated_at": c["updated_at"],
-                "message_count": c["message_count"],
-                "artifact_count": n_art,
-                "binary_count": n_bin,
-                "input_count": n_in,
-                "folder": base,
-            }
-        )
-        if i < len(summaries):
+        known[uuid] = {
+            "uuid": uuid,
+            "name": c["name"],
+            "folder": base,
+            "updated_at": summary.get("updated_at"),
+            "exported_at": _now_iso(),
+            "message_count": c["message_count"],
+            "artifact_count": n_art,
+            "binary_count": n_bin,
+            "input_count": n_in,
+            "archived": False,
+        }
+        new_ct += status == "new"
+        changed_ct += status == "changed"
+        if i < len(work):
             _sleep_polite(args.delay)  # pace requests to stay under rate limits
 
-    with open(os.path.join(args.out, "index.json"), "w") as f:
-        json.dump(index, f, ensure_ascii=False, indent=2)
-    print(f"\nDone. {len(index)} conversation(s) -> {args.out}/")
+    # Mark conversations no longer on the server as archived (kept locally).
+    archived_ct = 0
+    for uuid, entry in known.items():
+        gone = uuid not in present_uuids
+        if gone and not entry.get("archived"):
+            archived_ct += 1
+        entry["archived"] = gone
+
+    # Keep the manifest's conversations ordered newest-first so it doubles as a
+    # human-browseable index — no separate index.json needed.
+    manifest["conversations"] = dict(sorted(
+        known.items(),
+        key=lambda kv: kv[1].get("updated_at") or "", reverse=True,
+    ))
+    manifest["org"] = org
+    manifest["last_sync"] = _now_iso()
+    save_manifest(args.out, manifest)
+
+    print(f"\nSync complete: {new_ct} new, {changed_ct} updated, "
+          f"{unchanged} unchanged"
+          + (f", {deferred} deferred (--limit)" if deferred else "")
+          + (f", {archived_ct} newly-archived" if archived_ct else "")
+          + f". {len(known)} total tracked -> {args.out}/")
 
 
 if __name__ == "__main__":

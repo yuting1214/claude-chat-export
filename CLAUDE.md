@@ -73,14 +73,35 @@ Never echo the key back, never commit it, never paste it into chat output.
 `src/export.py` auto-loads `.env`, so no need to export the variable.
 
 ```bash
-python src/export.py --list                  # preview — show the COUNT
-python src/export.py                          # export ALL -> conversations/
-python src/export.py --limit 5                # newest 5
+python src/export.py --list                  # preview + sync status (new/changed/ok)
+python src/export.py                          # incremental sync -> conversations/
+python src/export.py --limit 5                # cap this run to 5 (newest of work set)
 python src/export.py --conversation <uuid>    # one
+python src/export.py --full                   # re-export everything, ignore manifest
 python src/export.py --format md              # md only (default md,json)
 ```
 
-Flow: run `--list` first, report the count, confirm scope, then export.
+Flow: run `--list` first (it shows how many are **new / changed / unchanged**),
+report that, confirm scope, then export.
+
+## Incremental sync (default behavior)
+
+The export is **incremental** — it does NOT re-fetch everything each run:
+
+- A `conversations/manifest.json` (keyed by conversation `uuid`) records each
+  chat's `updated_at` and export folder.
+- Each run lists all conversations (one cheap call) and fetches only the ones
+  that are **new** (unseen uuid) or **changed** (`updated_at` newer than recorded).
+  Unchanged chats are skipped — this is the whole point, so don't use `--full`
+  unless the user wants a complete rebuild.
+- Existing chats keep their folder (stable even if the title changed).
+- Conversations deleted on claude.ai are **kept locally** and marked
+  `"archived": true` in the manifest (the export is an archive, not a mirror).
+- The run prints `N new, M updated, K unchanged`. "0 new, 0 updated" means
+  everything is already up to date.
+
+`manifest.json` lives under `conversations/` (gitignored) — it holds chat names,
+so never commit it.
 
 ## Output layout (one folder per conversation)
 
