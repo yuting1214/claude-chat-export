@@ -208,15 +208,22 @@ python3 src/code/export.py --project <substr>      # only projects matching a su
 python3 src/code/export.py --session <id>          # one session
 python3 src/code/export.py --full                  # re-render everything
 python3 src/code/export.py --no-thinking           # omit assistant thinking blocks
-python3 src/code/export.py --include-sidechains    # include subagent threads
+python3 src/code/export.py --include-sidechains    # also fold inline sidechain records
 ```
 
 Flow: `--list` first (reports **new / changed / unchanged**), confirm scope
 (all? `--project` a repo? `--limit N`?), then export. Incremental via a
 `code-sessions/manifest.json` keyed by `sessionId` (re-renders only sessions whose
-file size/mtime changed). Output layout:
+file size/mtime changed — the signature includes the session's subagent files).
+Output layout:
 `code-sessions/<project-slug>/<date>__<sid8>__<title-slug>/{session.md,session.json}`.
 Sessions deleted from `~/.claude/projects` are kept and flagged `"archived": true`.
+
+**Spawned subagents** (Task/Agent runs in `<session>/subagents/agent-*.jsonl`) are
+**folded inline** at their spawn point (recursively) as collapsible `<details>`
+blocks, with an "Unlinked subagents" fallback so none are lost; they're also in
+`session.json`'s `subagents` array. After changing the renderer, re-run with
+`--full` to regenerate existing exports.
 
 ## Plugin
 

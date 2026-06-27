@@ -177,7 +177,10 @@ code-sessions/
 
 Assistant thinking renders in a collapsible block (`--no-thinking` to drop it);
 tool calls show name + input, with results quoted below (long output truncated).
-Subagent (sidechain) threads are excluded unless you pass `--include-sidechains`.
+**Spawned subagents** (Task/Agent runs, stored separately by Claude Code) are
+**folded inline** at their spawn point as collapsible blocks — recursively, so
+nested subagents are captured too — and also listed in `session.json`. (Pass
+`--include-sidechains` to additionally fold any inline sidechain records.)
 
 ## How it works
 

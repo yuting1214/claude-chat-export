@@ -76,8 +76,15 @@ code-sessions/
   `--no-thinking`).
 - **Tool calls** show the tool name + JSON input; **tool results** follow as
   quoted output (long inputs/outputs are truncated with a note).
-- **Subagent (sidechain) threads** are excluded by default; add
-  `--include-sidechains` to fold them in.
+- **Spawned subagents** (Task/Agent runs, stored separately under
+  `<session>/subagents/agent-*.jsonl`) are **folded inline** at their spawn point
+  as collapsible `<details>` blocks, recursively (nested subagents included). Any
+  whose spawn point can't be located are appended under an "Unlinked subagents"
+  section so nothing is lost. `session.json` also carries a `subagents` array.
+  The session's change signature includes its subagent files, so it re-renders
+  when they change.
+- `--include-sidechains` additionally folds in any *inline* `isSidechain` records
+  found within a transcript (separate from the spawned-subagent files above).
 
 ## Notes
 

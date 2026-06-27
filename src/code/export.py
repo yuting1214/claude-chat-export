@@ -107,6 +107,12 @@ def _parse_message(rec: dict) -> dict | None:
             elif bt == "image":
                 text_parts.append("[image]")
 
+    # When a Task/Agent tool returns, the result record carries the spawned
+    # subagent's id under toolUseResult.agentId — the splice point for folding
+    # that subagent's transcript inline.
+    tur = rec.get("toolUseResult")
+    spawn = tur.get("agentId") if isinstance(tur, dict) else None
+
     return {
         "role": role,
         "timestamp": rec.get("timestamp"),
@@ -115,6 +121,7 @@ def _parse_message(rec: dict) -> dict | None:
         "tools": tools,
         "results": results,
         "is_sidechain": bool(rec.get("isSidechain")),
+        "spawn_agent_id": spawn,
     }
 
 
@@ -158,6 +165,7 @@ def parse_session(path: str, include_sidechains: bool) -> dict:
         "git_branch": _last(rows, "gitBranch") or "",
         "version": _last(rows, "version") or "",
         "agent_name": _last(rows, "agentName") or "",
+        "agent_type": _last(rows, "attributionAgent") or "",
         "title": title,
         "created_at": timestamps[0] if timestamps else None,
         "updated_at": timestamps[-1] if timestamps else None,
@@ -184,32 +192,43 @@ def _fmt_ts(ts: str | None) -> str:
         return ts
 
 
-def to_markdown(s: dict, include_thinking: bool) -> str:
-    lines = [f"# {s['title']}", ""]
-    meta = [
-        ("Project", s["project_cwd"]),
-        ("Branch", s["git_branch"]),
-        ("Session", s["session_id"]),
-        ("Agent", s["agent_name"]),
-        ("Version", s["version"]),
-        ("Started", _fmt_ts(s["created_at"])),
-        ("Updated", _fmt_ts(s["updated_at"])),
-        ("Messages", str(s["message_count"])),
-    ]
-    for k, v in meta:
-        if v:
-            lines.append(f"- **{k}:** {v}")
-    lines.append("\n---\n")
+def _emit_results(m: dict, lines: list) -> None:
+    for r in m["results"]:
+        tag = "⚠️ Tool error" if r["is_error"] else "↳ Tool result"
+        lines.append(f"> **{tag}**\n")
+        lines.append("```\n" + _truncate(r["text"], MAX_RESULT_CHARS) + "\n```\n")
 
+
+def _fold_subagent(aid: str, subs: dict, include_thinking: bool,
+                   rendered: set, lines: list, depth: int) -> None:
+    """Splice a spawned subagent's transcript inline as a collapsible block."""
+    if aid in rendered or depth > 8:
+        return
+    rendered.add(aid)
+    sub = subs.get(aid)
+    if not sub:
+        return
+    atype = sub.get("agent_type") or sub.get("agent_name") or "subagent"
+    lines.append(
+        f'<details><summary>🧵 <b>Subagent: {atype}</b> '
+        f'<code>{aid[:8]}</code> — {sub["message_count"]} msgs</summary>\n'
+    )
+    _render_messages(sub["messages"], include_thinking, subs, rendered, lines, depth + 1)
+    lines.append("\n</details>\n")
+
+
+def _render_messages(messages: list, include_thinking: bool, subs: dict,
+                     rendered: set, lines: list, depth: int = 0) -> None:
     last_role = None
-    for m in s["messages"]:
-        # A user turn carrying only tool results -> render as an output block
-        # (it's the result of the assistant's tools, not a new human turn).
+    for m in messages:
+        # A user turn carrying only tool results -> an output block (the result
+        # of the assistant's tools, not a new human turn). If that result is an
+        # Agent/Task return, fold the spawned subagent's transcript in first.
         if m["role"] == "user" and not m["text"] and m["results"]:
-            for r in m["results"]:
-                tag = "⚠️ Tool error" if r["is_error"] else "↳ Tool result"
-                lines.append(f"> **{tag}**\n")
-                lines.append("```\n" + _truncate(r["text"], MAX_RESULT_CHARS) + "\n```\n")
+            if m.get("spawn_agent_id"):
+                _fold_subagent(m["spawn_agent_id"], subs, include_thinking, rendered, lines, depth)
+            _emit_results(m, lines)
+            last_role = None
             continue
 
         # Only print a role heading when the speaker actually changes, so a run
@@ -241,11 +260,44 @@ def to_markdown(s: dict, include_thinking: bool) -> str:
             lines.append(f"🔧 **{t['name']}**\n")
             lines.append("```json\n" + _truncate(inp, MAX_INPUT_CHARS) + "\n```\n")
 
-        # Results attached directly to an assistant turn (rare) or mixed user turns.
-        for r in m["results"]:
-            tag = "⚠️ Tool error" if r["is_error"] else "↳ Tool result"
-            lines.append(f"> **{tag}**\n")
-            lines.append("```\n" + _truncate(r["text"], MAX_RESULT_CHARS) + "\n```\n")
+        # Results attached directly to an assistant turn (rare) or mixed turns.
+        if m.get("spawn_agent_id"):
+            _fold_subagent(m["spawn_agent_id"], subs, include_thinking, rendered, lines, depth)
+        _emit_results(m, lines)
+
+    return None
+
+
+def to_markdown(s: dict, include_thinking: bool, subs: dict | None = None) -> str:
+    subs = subs or {}
+    lines = [f"# {s['title']}", ""]
+    meta = [
+        ("Project", s["project_cwd"]),
+        ("Branch", s["git_branch"]),
+        ("Session", s["session_id"]),
+        ("Agent", s["agent_name"]),
+        ("Version", s["version"]),
+        ("Started", _fmt_ts(s["created_at"])),
+        ("Updated", _fmt_ts(s["updated_at"])),
+        ("Messages", str(s["message_count"])),
+        ("Subagents", str(len(subs)) if subs else ""),
+    ]
+    for k, v in meta:
+        if v:
+            lines.append(f"- **{k}:** {v}")
+    lines.append("\n---\n")
+
+    rendered: set = set()
+    _render_messages(s["messages"], include_thinking, subs, rendered, lines, depth=0)
+
+    # Any subagent files we couldn't tie to a spawn point: append so nothing is
+    # lost (keeps the export complete even if linkage detection misses one).
+    leftover = [aid for aid in subs if aid not in rendered]
+    if leftover:
+        lines.append("\n---\n")
+        lines.append(f"## Unlinked subagents ({len(leftover)})\n")
+        for aid in leftover:
+            _fold_subagent(aid, subs, include_thinking, rendered, lines, depth=0)
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -269,11 +321,25 @@ def discover_sessions(src: str) -> list:
                 st = os.stat(fp)
             except OSError:
                 continue
+            mtime, size = int(st.st_mtime), st.st_size
+            # Fold any spawned-subagent files into the change signature so a
+            # session re-renders when its subagents change, not just its own file.
+            sdir = os.path.join(pdir, os.path.splitext(fn)[0], "subagents")
+            if os.path.isdir(sdir):
+                for sf in os.listdir(sdir):
+                    if not sf.endswith(".jsonl"):
+                        continue
+                    try:
+                        sst = os.stat(os.path.join(sdir, sf))
+                    except OSError:
+                        continue
+                    mtime = max(mtime, int(sst.st_mtime))
+                    size += sst.st_size
             out.append({
                 "session_id": os.path.splitext(fn)[0],
                 "file": fp,
-                "mtime": int(st.st_mtime),
-                "size": st.st_size,
+                "mtime": mtime,
+                "size": size,
                 "project_dir": proj,
             })
     out.sort(key=lambda r: r["mtime"], reverse=True)
@@ -306,6 +372,23 @@ def classify(rec: dict, known: dict) -> str:
     if prev.get("size") != rec["size"] or prev.get("mtime") != rec["mtime"]:
         return "changed"
     return "unchanged"
+
+
+def subagent_map(session_file: str, include_sidechains: bool) -> dict:
+    """Parse a session's spawned subagents -> {agentId: parsed transcript}.
+
+    They live in a sibling `<session-id>/subagents/agent-<id>.jsonl` directory.
+    """
+    base = session_file[:-6] if session_file.endswith(".jsonl") else session_file
+    sdir = os.path.join(base, "subagents")
+    out = {}
+    if os.path.isdir(sdir):
+        for fn in sorted(os.listdir(sdir)):
+            if fn.startswith("agent-") and fn.endswith(".jsonl"):
+                aid = fn[len("agent-"):-len(".jsonl")]
+                # Subagent transcripts ARE the sidechain content — always include.
+                out[aid] = parse_session(os.path.join(sdir, fn), include_sidechains=True)
+    return out
 
 
 def _project_slug(cwd: str, project_dir: str) -> str:
@@ -377,6 +460,7 @@ def main() -> None:
     done = 0
     for i, (state, rec) in enumerate(todo, 1):
         s = parse_session(rec["file"], args.include_sidechains)
+        subs = subagent_map(rec["file"], args.include_sidechains)
         proj = _project_slug(s["project_cwd"], rec["project_dir"])
         folder = known.get(s["session_id"], {}).get("folder")
         if not folder:
@@ -392,10 +476,16 @@ def main() -> None:
 
         if "md" in formats:
             with open(os.path.join(conv_dir, "session.md"), "w", encoding="utf-8") as f:
-                f.write(to_markdown(s, include_thinking=not args.no_thinking))
+                f.write(to_markdown(s, include_thinking=not args.no_thinking, subs=subs))
         if "json" in formats:
+            s_json = dict(s)
+            s_json["subagents"] = [
+                {"agent_id": aid, "agent_type": d.get("agent_type"),
+                 "message_count": d["message_count"], "messages": d["messages"]}
+                for aid, d in subs.items()
+            ]
             with open(os.path.join(conv_dir, "session.json"), "w", encoding="utf-8") as f:
-                json.dump(s, f, ensure_ascii=False, indent=2)
+                json.dump(s_json, f, ensure_ascii=False, indent=2)
 
         known[s["session_id"]] = {
             "title": s["title"],
@@ -409,7 +499,9 @@ def main() -> None:
             "archived": False,
         }
         done += 1
-        print(f"[{i}/{len(todo)}] {state:<9} {proj}/{os.path.basename(folder)} ({s['message_count']} msgs)")
+        extra = f", {len(subs)} subagents" if subs else ""
+        print(f"[{i}/{len(todo)}] {state:<9} {proj}/{os.path.basename(folder)} "
+              f"({s['message_count']} msgs{extra})")
 
     # Mark sessions that vanished from the source (keep them locally).
     live = {r["session_id"] for r in sessions}
