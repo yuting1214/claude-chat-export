@@ -1,0 +1,20 @@
+{
+  "name": "claude-chat-export",
+  "version": "1.0.0",
+  "description": "Export your claude.ai chat history into readable Markdown + JSON. Incremental, rate-limit-safe, fully local sessionKey extraction on macOS.",
+  "author": {
+    "name": "yuting1214",
+    "email": "l501l501l@gmail.com"
+  },
+  "homepage": "https://github.com/yuting1214/claude-chat-export",
+  "repository": "https://github.com/yuting1214/claude-chat-export",
+  "license": "MIT",
+  "keywords": [
+    "claude",
+    "export",
+    "backup",
+    "archive",
+    "chat-history",
+    "markdown"
+  ]
+}

@@ -26,6 +26,34 @@ python3 src/export.py              # export everything -> conversations/
 > claude.ai DevTools (Application → Cookies) and save it yourself:
 > `printf 'CLAUDE_SESSION_KEY=%s\n' '<key>' > .env`
 
+## Use as a Claude Code plugin
+
+This repo is also a self-contained [Claude Code](https://claude.com/claude-code)
+**plugin** (it ships its own marketplace), so you can install it once and run the
+whole export flow from any directory via a skill — no need to keep the repo as
+your working dir.
+
+```bash
+# From inside Claude Code, point it at this repo as a marketplace…
+/plugin marketplace add yuting1214/claude-chat-export      # GitHub
+# …or add a local clone:
+/plugin marketplace add /path/to/claude-chat-export
+
+# then install the plugin:
+/plugin install claude-chat-export@claude-chat-export
+```
+
+Once installed, just ask Claude to “export my Claude chats” (the skill
+auto-invokes), or call it explicitly:
+
+```
+/claude-chat-export:export
+```
+
+The skill drives the same onboarding → `--list` → export → regenerate flow
+described below. Bundled scripts and output live under the plugin's install
+directory (`${CLAUDE_PLUGIN_ROOT}`), so it stays self-contained.
+
 ## Options
 
 | Flag | Meaning |

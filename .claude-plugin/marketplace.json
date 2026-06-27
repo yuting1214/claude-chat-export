@@ -1,0 +1,19 @@
+{
+  "name": "claude-chat-export",
+  "owner": {
+    "name": "yuting1214",
+    "email": "l501l501l@gmail.com"
+  },
+  "metadata": {
+    "description": "Single-plugin marketplace for claude-chat-export.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "claude-chat-export",
+      "source": "./",
+      "description": "Export your claude.ai chat history into readable Markdown + JSON.",
+      "version": "1.0.0"
+    }
+  ]
+}
