@@ -2,6 +2,9 @@
 /conversations/*
 !/conversations/.gitkeep
 
+# Exported Claude Code sessions are PERSONAL data too.
+/code-sessions/
+
 # Secrets
 .env
 *.session

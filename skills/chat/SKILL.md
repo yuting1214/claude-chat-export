@@ -1,9 +1,9 @@
 ---
-name: export
-description: "Export the user's claude.ai (web/desktop) chat history into readable Markdown + JSON. Use when the user wants to back up, archive, download, sync, fetch recent, or export their Claude chats/conversations, or refresh their local chat archive. macOS-first (auto-extracts the sessionKey once via Keychain); manual cookie fallback elsewhere."
+name: chat
+description: "Export the user's claude.ai (web/desktop) chat history into readable Markdown + JSON. Use when the user wants to back up, archive, download, sync, fetch recent, or export their Claude.ai chats/conversations, or refresh their local chat archive. For Claude Code CLI session history, use the 'code' skill instead. macOS-first (auto-extracts the sessionKey once via Keychain); manual cookie fallback elsewhere."
 ---
 
-# claude-chat-export: export
+# claude-export: chat
 
 Export claude.ai chat history into readable Markdown + JSON, one folder per
 conversation. The export is **incremental** (a uuid-keyed manifest fetches only
@@ -13,7 +13,7 @@ whole flow; the onboarding gate is designed to prompt for the Keychain password
 
 ## Where things live (self-contained under the plugin)
 
-The scripts ship inside this plugin at `${CLAUDE_PLUGIN_ROOT}/src/` and run with
+The scripts ship inside this plugin at `${CLAUDE_PLUGIN_ROOT}/src/chat/` and run with
 `python3` (not `python` — it's often missing on macOS PATH). They anchor `.env`
 and `.regen-cache/` to the plugin root automatically. Output is cwd-relative by
 default, so **always pass `--out`/`--dir` with the absolute path below** so the
@@ -30,7 +30,7 @@ OUT="$ROOT/conversations"
 
 ```
 $ROOT/
-├── src/                  # auth.py · export.py · regenerate.py (bundled)
+├── src/chat/             # auth.py · export.py · regenerate.py (bundled)
 ├── .env                  # (created by auth) CLAUDE_SESSION_KEY, chmod 600
 ├── conversations/        # export output, one folder per chat (+ manifest.json)
 └── .regen-cache/         # regenerate.py's node/python deps
@@ -56,7 +56,7 @@ Tell the user up front, then run it:
 > sent anywhere — extraction is fully local.
 
 ```bash
-python3 "$ROOT/src/auth.py"
+python3 "$ROOT/src/chat/auth.py"
 ```
 
 Writes `.env` (chmod 600) in the plugin root. Idempotent — re-running won't
@@ -79,12 +79,12 @@ printf 'CLAUDE_SESSION_KEY=%s\n' "<pasted-key>" > "$ROOT/.env" && chmod 600 "$RO
 `export.py` auto-loads `.env` from the plugin root.
 
 ```bash
-python3 "$ROOT/src/export.py" --list --out "$OUT"                 # preview + sync status
-python3 "$ROOT/src/export.py" --out "$OUT"                        # incremental sync
-python3 "$ROOT/src/export.py" --out "$OUT" --limit 5              # cap to 5 newest
-python3 "$ROOT/src/export.py" --out "$OUT" --conversation <uuid>  # one chat
-python3 "$ROOT/src/export.py" --out "$OUT" --full                 # rebuild everything
-python3 "$ROOT/src/export.py" --out "$OUT" --format md            # md only (default md,json)
+python3 "$ROOT/src/chat/export.py" --list --out "$OUT"                 # preview + sync status
+python3 "$ROOT/src/chat/export.py" --out "$OUT"                        # incremental sync
+python3 "$ROOT/src/chat/export.py" --out "$OUT" --limit 5              # cap to 5 newest
+python3 "$ROOT/src/chat/export.py" --out "$OUT" --conversation <uuid>  # one chat
+python3 "$ROOT/src/chat/export.py" --out "$OUT" --full                 # rebuild everything
+python3 "$ROOT/src/chat/export.py" --out "$OUT" --format md            # md only (default md,json)
 ```
 
 **Default end-to-end flow:**
@@ -103,8 +103,8 @@ sync reports binary deliverables, rebuild the real files right after — by
 default, without asking:
 
 ```bash
-python3 "$ROOT/src/regenerate.py" --dir "$OUT"
-python3 "$ROOT/src/regenerate.py" --dir "$OUT" --conversation <folder>   # one
+python3 "$ROOT/src/chat/regenerate.py" --dir "$OUT"
+python3 "$ROOT/src/chat/regenerate.py" --dir "$OUT" --conversation <folder>   # one
 ```
 
 - Report the result (`Regenerated X, failed Y`) in the summary.
@@ -150,7 +150,7 @@ explicit instruction.
 
 ## Troubleshooting
 
-- **401/403** → key expired: `python3 "$ROOT/src/auth.py" --force`.
+- **401/403** → key expired: `python3 "$ROOT/src/chat/auth.py" --force`.
 - **Empty `--list`** → wrong org auto-picked: pass `--org <uuid>` (find orgs by
   GETting `/api/organizations` with the same cookie).
 - **Keychain prompt won't go away** → user clicked "Allow" once instead of

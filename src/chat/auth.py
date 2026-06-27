@@ -26,7 +26,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)            # repo root (parent of src/)
+ROOT = os.path.dirname(os.path.dirname(HERE))   # repo/plugin root (parent of src/)
 ENV_PATH = os.path.join(ROOT, ".env")   # .env lives at the repo root
 COOKIES = os.path.expanduser(
     "~/Library/Application Support/Claude/Cookies"

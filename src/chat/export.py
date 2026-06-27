@@ -28,6 +28,10 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
+# Make the shared src/common package importable when run as a plain script.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # -> src/
+from common.text import slugify  # noqa: E402
+
 BASE = "https://claude.ai"
 UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -418,12 +422,6 @@ def normalize(convo: dict, arts: dict, inputs: list) -> dict:
 # --------------------------------------------------------------------------- #
 # Rendering                                                                    #
 # --------------------------------------------------------------------------- #
-def slugify(name: str) -> str:
-    s = re.sub(r"[^\w\s-]", "", name.lower()).strip()
-    s = re.sub(r"[\s_-]+", "-", s)
-    return s[:60] or "untitled"
-
-
 _ROLE_LABEL = {"human": "🧑 Human", "assistant": "🤖 Assistant"}
 
 
@@ -480,8 +478,8 @@ def load_env_file() -> None:
     """
     if os.environ.get("CLAUDE_SESSION_KEY"):
         return
-    # .env lives at the repo root (parent of src/), not next to this script.
-    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # .env lives at the repo/plugin root (two levels up from src/chat/).
+    root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     env_path = os.path.join(root, ".env")
     if not os.path.exists(env_path):
         return

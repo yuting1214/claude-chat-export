@@ -28,7 +28,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)                  # repo root (parent of src/)
+ROOT = os.path.dirname(os.path.dirname(HERE))   # repo/plugin root (parent of src/)
 CACHE = os.path.join(ROOT, ".regen-cache")    # dep cache at the repo root
 
 _NODE_BUILTINS = {
