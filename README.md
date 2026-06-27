@@ -1,7 +1,9 @@
 # claude-chat-export
 
-Export your [claude.ai](https://claude.ai) chat history into **readable Markdown**
-and **normalized JSON** — turning your conversations into shareable, portable
+Export your Claude history into **readable Markdown** and **normalized JSON** —
+both your [claude.ai](https://claude.ai) **web chats** and your
+[**Claude Code (CLI) sessions**](#claude-code-session-export) (with spawned
+subagents folded in) — turning your conversations into shareable, portable
 knowledge files.
 
 Built to be driven by an agent: clone the repo, open it in
